@@ -1,0 +1,609 @@
+{
+  "name": "AI-Powered Lead Generation SaaS Platform Architecture and Development",
+  "nodes": [
+    {
+      "parameters": {
+        "notice": "AI-Powered Lead Generation Platform - Ready to Process Leads!\n\nModes:\n- Single: Process one domain at a time (set in Input Configuration)\n- Bulk: Process multiple domains from Google Sheet\n\nClick Execute to start processing!"
+      },
+      "id": "29329e50-4c7e-499b-8e58-ccf156c31c3c",
+      "name": "Start Workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "processingMode",
+              "value": "single",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "domain",
+              "value": "stripe.com",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "companyName",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c00f9447-75cb-422d-bcc2-3d20b8b80752",
+      "name": "Input Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $('Input Configuration').item.json.processingMode }}",
+              "rightValue": "bulk",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "de2f6a02-894d-46fe-89ba-bce38bd2e9b1",
+      "name": "Single or Bulk Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        704,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1qz8jJ0AXxwMUTAZe9V2zIzm5SPX4FuVXYSQWVquH0ko/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet2"
+        },
+        "options": {}
+      },
+      "id": "3c186d96-2118-4822-a18c-b3ba777ee064",
+      "name": "Read Bulk Domains from Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        928,
+        544
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "s5LJMAtIoCNLiHfs",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "={{ $json.name }}",
+        "options": {}
+      },
+      "id": "8c1b9cbb-45c9-4055-8bd7-ddb12bc4355d",
+      "name": "Split Domains for Processing",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://' + ($json.name || $json.domain).replace(/^https?:\\/\\//, '') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "53ca29d0-6f95-444f-bd11-1940017c285f",
+      "name": "Scrape Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        480
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Enhanced email extraction with contact page detection and decision-maker identification\nconst html = $input.item.json.data || '';\nconst domain = $input.item.json.domain || $input.item.json.name || '';\n\n// Regex pattern to match email addresses\nconst emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/g;\n\n// Extract all emails from HTML\nconst foundEmails = html.match(emailRegex) || [];\n\n// Common generic/spam emails to filter out\nconst genericEmails = [\n  'noreply@',\n  'no-reply@',\n  'donotreply@',\n  'support@',\n  'info@',\n  'admin@',\n  'webmaster@',\n  'postmaster@',\n  'abuse@',\n  'privacy@',\n  'legal@',\n  'marketing@',\n  'sales@',\n  'hello@',\n  'contact@',\n  'example@',\n  'test@',\n  'demo@'\n];\n\n// Remove duplicates and filter out generic emails\nconst uniqueEmails = [...new Set(foundEmails)]\n  .filter(email => {\n    const lowerEmail = email.toLowerCase();\n    return !genericEmails.some(generic => lowerEmail.startsWith(generic));\n  })\n  .filter(email => email.length > 0);\n\n// Identify decision-maker emails (firstname.lastname pattern)\nconst decisionMakerEmails = uniqueEmails.filter(email => {\n  const localPart = email.split('@')[0];\n  // Check for firstname.lastname or firstname_lastname pattern\n  return /^[a-z]+[._-][a-z]+$/i.test(localPart);\n});\n\n// Find contact page links\nconst contactPageRegex = /<a[^>]*href=[\"']([^\"']*(?:contact|about|team|leadership)[^\"']*)[\"'][^>]*>/gi;\nconst contactPages = [];\nlet match;\n\nwhile ((match = contactPageRegex.exec(html)) !== null) {\n  let url = match[1];\n  \n  // Convert relative URLs to absolute\n  if (url.startsWith('/')) {\n    url = 'https://' + domain.replace(/^https?:\\/\\//, '') + url;\n  } else if (!url.startsWith('http')) {\n    url = 'https://' + domain.replace(/^https?:\\/\\//, '') + '/' + url;\n  }\n  \n  contactPages.push(url);\n}\n\n// Remove duplicate contact pages\nconst uniqueContactPages = [...new Set(contactPages)];\n\n// Categorize emails\nconst categorizedEmails = {\n  decisionMakers: decisionMakerEmails,\n  generic: uniqueEmails.filter(email => !decisionMakerEmails.includes(email)),\n  all: uniqueEmails\n};\n\n// Return structured data\nreturn {\n  json: {\n    domain: domain,\n    emails: uniqueEmails,\n    emailCount: uniqueEmails.length,\n    decisionMakerEmails: decisionMakerEmails,\n    decisionMakerCount: decisionMakerEmails.length,\n    categorizedEmails: categorizedEmails,\n    contactPages: uniqueContactPages,\n    contactPageCount: uniqueContactPages.length,\n    rawHtml: html.substring(0, 500) // Keep first 500 chars for reference\n  }\n};"
+      },
+      "id": "66d4a4fa-d2b1-4144-9231-f62ed08177a5",
+      "name": "Extract Emails with Regex",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Calculate lead score based on multiple factors\nconst leadData = $input.item.json;\n\n// Initialize score\nlet totalScore = 0;\n\n// 1. Email Quality Score (50 points max)\nlet emailScore = 0;\nconst emails = leadData.emails || [];\nconst emailCount = leadData.emailCount || 0;\n\nif (emailCount > 0) {\n  // Base points for having emails\n  emailScore += 20;\n  \n  // Additional points based on number of emails (up to 15 points)\n  if (emailCount >= 5) {\n    emailScore += 15;\n  } else {\n    emailScore += emailCount * 3;\n  }\n  \n  // Quality check - prefer business emails (up to 15 points)\n  const businessEmails = emails.filter(email => {\n    const domain = email.split('@')[1];\n    return domain && !['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'].includes(domain.toLowerCase());\n  });\n  \n  if (businessEmails.length > 0) {\n    emailScore += Math.min(15, businessEmails.length * 5);\n  }\n}\n\ntotalScore += Math.min(50, emailScore);\n\n// 2. Company Size Score (30 points max)\nlet companySizeScore = 0;\nconst companySize = leadData.companySize || leadData.employeeCount || '';\n\nif (companySize) {\n  const sizeStr = String(companySize).toLowerCase();\n  \n  if (sizeStr.includes('enterprise') || sizeStr.includes('1000+') || sizeStr.includes('large')) {\n    companySizeScore = 30;\n  } else if (sizeStr.includes('medium') || sizeStr.includes('100-999') || sizeStr.includes('mid')) {\n    companySizeScore = 20;\n  } else if (sizeStr.includes('small') || sizeStr.includes('10-99') || sizeStr.includes('startup')) {\n    companySizeScore = 10;\n  } else {\n    companySizeScore = 5; // Some info is better than none\n  }\n}\n\ntotalScore += companySizeScore;\n\n// 3. Industry Match Score (20 points max)\nlet industryScore = 0;\nconst industry = leadData.industry || '';\n\n// Target industries (customize based on your ICP)\nconst targetIndustries = ['technology', 'software', 'saas', 'fintech', 'ecommerce', 'digital', 'marketing'];\n\nif (industry) {\n  const industryStr = String(industry).toLowerCase();\n  \n  // Check if industry matches target industries\n  const isTargetIndustry = targetIndustries.some(target => industryStr.includes(target));\n  \n  if (isTargetIndustry) {\n    industryScore = 20;\n  } else {\n    industryScore = 10; // Some industry info is valuable\n  }\n}\n\ntotalScore += industryScore;\n\n// Ensure score is within 0-100 range\ntotalScore = Math.max(0, Math.min(100, Math.round(totalScore)));\n\n// Determine lead quality tier\nlet leadTier = '';\nif (totalScore >= 80) {\n  leadTier = 'Hot';\n} else if (totalScore >= 60) {\n  leadTier = 'Warm';\n} else if (totalScore >= 40) {\n  leadTier = 'Cold';\n} else {\n  leadTier = 'Low Quality';\n}\n\n// Return all lead data with calculated score\nreturn {\n  json: {\n    ...leadData,\n    leadScore: totalScore,\n    leadTier: leadTier,\n    scoreBreakdown: {\n      emailScore: Math.min(50, emailScore),\n      companySizeScore: companySizeScore,\n      industryScore: industryScore\n    }\n  }\n};"
+      },
+      "id": "249eb00f-f027-46d7-845e-8b5d45973636",
+      "name": "Calculate Lead Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "Domain",
+              "value": "={{ $json.domain }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "Emails",
+              "value": "={{ $json.emails ? $json.emails.join(', ') : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "Company Size",
+              "value": "={{ $json.companySize || 'Unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "Industry",
+              "value": "={{ $json.industry || 'Unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "Lead Score",
+              "value": "={{ $json.leadScore || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "id-6",
+              "name": "Status",
+              "value": "={{ $json.status || 'processed' }}",
+              "type": "string"
+            },
+            {
+              "id": "id-7",
+              "name": "Processed Date",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f24a16c5-799f-47ea-ba84-6e601f208a32",
+      "name": "Prepare Lead Data for Sheet",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2496,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1mt7wNqL3UFPqHJbwnttiDwuAvlw91T97tsF02cpWMlc",
+          "mode": "list",
+          "cachedResultName": "Assignment 4: Manali Trip ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mt7wNqL3UFPqHJbwnttiDwuAvlw91T97tsF02cpWMlc/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1088686229",
+          "cachedResultName": "Manali Trip Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1mt7wNqL3UFPqHJbwnttiDwuAvlw91T97tsF02cpWMlc/edit#gid=1088686229"
+        },
+        "options": {}
+      },
+      "id": "bb997429-a620-4b21-809d-5231fd7c5a92",
+      "name": "Write Leads to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2720,
+        480
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "s5LJMAtIoCNLiHfs",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "domain",
+              "value": "={{ $json.domain }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "status",
+              "value": "scraping_failed",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "error",
+              "value": "={{ $json.error.message }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "emails",
+              "value": "[]",
+              "type": "array"
+            },
+            {
+              "id": "id-5",
+              "name": "leadScore",
+              "value": 0,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3046c3bf-4736-4940-ac6c-e085d625056e",
+      "name": "Handle Scraping Errors",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2272,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-3-5-sonnet-20241022\",\n  \"max_tokens\": 4000,\n  \"temperature\": 0.2,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyze this company and provide enrichment data in JSON format:\\n\\nDomain: {{ $json.domain }}\\nEmails Found: {{ $json.emails ? $json.emails.join(', ') : 'None' }}\\nWebsite Content (first 2000 chars): {{ $json.rawHtml ? $json.rawHtml.substring(0, 2000) : 'N/A' }}\\n\\nPlease provide:\\n1. Company size estimate (small/medium/large/enterprise)\\n2. Industry classification\\n3. Key products/services\\n4. Target market\\n5. Technology stack indicators\\n\\nReturn as JSON with keys: companySize, industry, products, targetMarket, techStack\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "658fc7da-fefe-4340-a497-bddbc6b389a2",
+      "name": "AI Lead Enrichment (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1824,
+        576
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude API response and merge with existing lead data\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  try {\n    // Get the Claude API response\n    const apiResponse = item.json;\n    \n    // Extract the AI-generated content from Claude's response structure\n    let enrichmentData = {};\n    \n    if (apiResponse.content && Array.isArray(apiResponse.content)) {\n      // Claude returns content in an array with text blocks\n      const textContent = apiResponse.content.find(block => block.type === 'text');\n      \n      if (textContent && textContent.text) {\n        // Parse the JSON from the text content\n        try {\n          // Extract JSON from the text (it might be wrapped in markdown code blocks)\n          let jsonText = textContent.text;\n          \n          // Remove markdown code blocks if present\n          jsonText = jsonText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n          \n          enrichmentData = JSON.parse(jsonText);\n        } catch (parseError) {\n          console.log('Failed to parse AI response as JSON:', parseError.message);\n          enrichmentData = {\n            companySize: 'Unknown',\n            industry: 'Unknown',\n            products: 'Unable to parse',\n            targetMarket: 'Unknown',\n            techStack: 'Unknown'\n          };\n        }\n      }\n    }\n    \n    // Merge enrichment data with existing lead data\n    const mergedData = {\n      domain: item.json.domain || '',\n      emails: item.json.emails || [],\n      emailCount: item.json.emailCount || 0,\n      decisionMakerEmails: item.json.decisionMakerEmails || [],\n      decisionMakerCount: item.json.decisionMakerCount || 0,\n      categorizedEmails: item.json.categorizedEmails || {},\n      contactPages: item.json.contactPages || [],\n      contactPageCount: item.json.contactPageCount || 0,\n      // AI enrichment data\n      companySize: enrichmentData.companySize || 'Unknown',\n      industry: enrichmentData.industry || 'Unknown',\n      products: enrichmentData.products || 'Unknown',\n      targetMarket: enrichmentData.targetMarket || 'Unknown',\n      techStack: enrichmentData.techStack || 'Unknown',\n      // Status\n      status: 'enriched'\n    };\n    \n    results.push({ json: mergedData });\n    \n  } catch (error) {\n    console.log('Error processing item:', error.message);\n    \n    // Return item with error status\n    results.push({\n      json: {\n        domain: item.json.domain || 'Unknown',\n        emails: item.json.emails || [],\n        emailCount: item.json.emailCount || 0,\n        companySize: 'Unknown',\n        industry: 'Unknown',\n        products: 'Error',\n        targetMarket: 'Unknown',\n        techStack: 'Unknown',\n        status: 'enrichment_failed',\n        error: error.message\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "017a6e9c-4833-43e2-b9bb-52c328da34ad",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "domain",
+              "value": "={{ $json.domain }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "status",
+              "value": "ai_enrichment_failed",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "error",
+              "value": "={{ $json.error.message }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "companySize",
+              "value": "Unknown",
+              "type": "string"
+            },
+            {
+              "id": "id-5",
+              "name": "industry",
+              "value": "Unknown",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "4ab02e01-7dd4-4c2f-b9c3-e10b081f5d78",
+      "name": "Handle AI Errors",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2048,
+        672
+      ]
+    }
+  ],
+  "pinData": {
+    "Read Bulk Domains from Sheet": [
+      {
+        "json": {
+          "name": "First item",
+          "code": 1
+        }
+      },
+      {
+        "json": {
+          "name": "Second item",
+          "code": 2
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Start Workflow": {
+      "main": [
+        [
+          {
+            "node": "Input Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Configuration": {
+      "main": [
+        [
+          {
+            "node": "Single or Bulk Mode?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Single or Bulk Mode?": {
+      "main": [
+        [
+          {
+            "node": "Read Bulk Domains from Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Bulk Domains from Sheet": {
+      "main": [
+        [
+          {
+            "node": "Split Domains for Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Domains for Processing": {
+      "main": [
+        [
+          {
+            "node": "Scrape Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Website": {
+      "main": [
+        [
+          {
+            "node": "Extract Emails with Regex",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Scraping Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Emails with Regex": {
+      "main": [
+        [
+          {
+            "node": "AI Lead Enrichment (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Lead Score": {
+      "main": [
+        [
+          {
+            "node": "Prepare Lead Data for Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Scraping Errors": {
+      "main": [
+        [
+          {
+            "node": "Prepare Lead Data for Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Lead Data for Sheet": {
+      "main": [
+        [
+          {
+            "node": "Write Leads to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Lead Enrichment (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle AI Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Calculate Lead Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle AI Errors": {
+      "main": [
+        [
+          {
+            "node": "Calculate Lead Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5a9d0c38-2ee7-49d8-b27e-02060e5ab51f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b6a4474b3aadf31c4b141ac5bcdd96990ffc44270c79c9bff6a6656ec4b3a29e"
+  },
+  "id": "3810lhcUw3ypmgSE",
+  "tags": []
+}
